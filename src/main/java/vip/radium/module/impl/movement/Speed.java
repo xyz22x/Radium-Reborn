@@ -23,7 +23,9 @@ import vip.radium.utils.*;
 @ModuleInfo(label = "Speed", category = ModuleCategory.MOVEMENT)
 public final class Speed extends Module {
 
-    private final EnumProperty<SpeedMode> speedModeProperty = new EnumProperty<>("Mode", SpeedMode.WATCHDOGE);    private final EnumProperty<FrictionMode> frictionModeProperty = new EnumProperty<>("Friction Mode", FrictionMode.NCP,
+    private final EnumProperty<SpeedMode> speedModeProperty = new EnumProperty<>("Mode", SpeedMode.WATCHDOGE);    private final DoubleProperty onGroundSpeedProperty = new DoubleProperty("OnGround Speed", 1.2174D,
+            () -> speedModeProperty.getValue() == SpeedMode.GROUND, 1.0D, 2.0D, 0.001D);
+    private final EnumProperty<FrictionMode> frictionModeProperty = new EnumProperty<>("Friction Mode", FrictionMode.NCP,
             this::isWatchdog);
     private final Property<Boolean> glideProperty = new Property<>("Glide", false);
     private final DoubleProperty customSpeedProperty = new DoubleProperty("Custom Speed", 0.5,
@@ -156,7 +158,7 @@ public final class Speed extends Module {
 
                 final boolean strafing = Wrapper.getGameSettings().keyBindLeft.isKeyDown() ||
                         Wrapper.getGameSettings().keyBindRight.isKeyDown();
-                final double groundFactor = strafing ? 1.214D : 1.2174D;
+                final double groundFactor = strafing ? 1.214D : onGroundSpeedProperty.getValue();
 
                 e.setX(e.getX() * groundFactor);
                 e.setZ(e.getZ() * groundFactor);

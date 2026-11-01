@@ -50,14 +50,15 @@ public final class KillAura extends Module {
     private static final C08PacketPlayerBlockPlacement BLOCK_PACKET = new C08PacketPlayerBlockPlacement(
             new BlockPos(-0.0F, -0.0F, -0.0F), 255, null, 0.0f, 0.0f, 0.0f);
     public static int waitTicks;
+    private final TimerUtil timer = new TimerUtil();
     private final EnumProperty<AuraMode> auraModeProperty = new EnumProperty<>("Mode", AuraMode.PRIORITY);
     private final EnumProperty<SortingMethod> sortingMethodProperty = new EnumProperty<>("Sorting Method", SortingMethod.HEALTH);
     private final EnumProperty<AttackMethod> attackMethodProperty = new EnumProperty<>("Attack Method", AttackMethod.POST);
     private final Property<Boolean> duraProperty = new Property<>("Dura", false);
-    private final DoubleProperty minApsProperty = new DoubleProperty("Min APS", 8.0,
-            () -> !this.duraProperty.getValue(), 1.0, 20.0, 1.0);
-    private final DoubleProperty maxApsProperty = new DoubleProperty("Max APS", 10.0,
-            () -> !this.duraProperty.getValue(), 1.0, 20.0, 1.0);
+    private final DoubleProperty minCpsProperty = new DoubleProperty("Min CPS", 10.0,
+            () -> !this.duraProperty.getValue(), 0.0, 100.0, 1.0);
+    private final DoubleProperty maxCpsProperty = new DoubleProperty("Max CPS", 15.0,
+            () -> !this.duraProperty.getValue(), 0.0, 100.0, 1.0);
     private final DoubleProperty rangeProperty = new DoubleProperty("Range", 4.3, 3.0,
             6.0, 0.1, Representation.DISTANCE);
     private final DoubleProperty rangeThruWalls = new DoubleProperty("Wall Range", 2.0, 1.0,
@@ -66,6 +67,7 @@ public final class KillAura extends Module {
     private final DoubleProperty blockRangeProperty = new DoubleProperty("Block Range", 8.0,
             autoblockProperty::getValue,
             3.0, 8.0, 0.1, Representation.DISTANCE);
+    private final DoubleProperty switchDelayProperty = new DoubleProperty("Switch Delay", 500, 10, 1000, 10);
     private final MultiSelectEnumProperty<Checks> checksProperty = new MultiSelectEnumProperty<>("Checks", Checks.ALIVE, Checks.ROTATION);
     private final DoubleProperty maxAngleChangeProperty = new DoubleProperty("Max Angle Step", 45.0, 1.0, 201.25, 0.25);
     private final DoubleProperty fovProperty = new DoubleProperty("Scan Degrees", 201.25, () -> checksProperty.isSelected(Checks.FOV), 0, 201.25, 0.25);
@@ -194,17 +196,22 @@ public final class KillAura extends Module {
 
         final EntityPlayer localPlayer = Wrapper.getPlayer();
 
-        int min = this.minApsProperty.getValue().intValue();
-        int max = this.maxApsProperty.getValue().intValue();
+        if (auraModeProperty.getValue() == AuraMode.SWITCH && !this.timer.hasElapsed(this.switchDelayProperty.getValue().longValue()))
+            return;
+
+        int min = this.minCpsProperty.getValue().intValue();
+        int max = this.maxCpsProperty.getValue().intValue();
 
         if (min > max) {
+            // Swap so min is always the smaller value
+            final int tmp = min;
             min = max;
-            max = min;
+            max = tmp;
         }
 
         final int cps;
         if (min == max) cps = min;
-        else cps = RandomUtils.nextInt(min, max);
+        else cps = RandomUtils.nextInt(min, max + 1);
 
         if (attackTimer.hasElapsed(1000L / cps) && isLookingAtEntity(event.getYaw(), event.getPitch())) {
             localPlayer.swingItem();
@@ -349,7 +356,8 @@ public final class KillAura extends Module {
     }
 
     private enum AuraMode {
-        PRIORITY
+        PRIORITY,
+        SWITCH
     }
 
     private enum AttackMethod {

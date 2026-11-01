@@ -72,6 +72,7 @@ public final class ModuleManager {
                 new DamageParticles(),
                 new EnchantGlint(),
                 new NoScoreboard(),
+                new Hats(),
                 // Other
                 new InventoryMove(),
                 new MemoryFix(),

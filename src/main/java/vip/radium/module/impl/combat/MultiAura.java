@@ -8,8 +8,12 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.monster.EntityMob;
 import net.minecraft.entity.passive.EntityAnimal;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.network.play.client.C02PacketUseEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.ItemSword;
 import net.minecraft.network.play.client.C03PacketPlayer;
+import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
+import net.minecraft.network.play.client.C02PacketUseEntity;
+import net.minecraft.util.BlockPos;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
@@ -22,6 +26,7 @@ import vip.radium.module.ModuleInfo;
 import vip.radium.module.ModuleManager;
 import vip.radium.module.impl.player.AutoTool;
 import vip.radium.module.impl.player.Scaffold;
+import vip.radium.property.Property;
 import vip.radium.property.impl.DoubleProperty;
 import vip.radium.property.impl.EnumProperty;
 import vip.radium.property.impl.MultiSelectEnumProperty;
@@ -39,12 +44,14 @@ import java.util.List;
 public final class MultiAura extends Module {
 
     private final EnumProperty<AttackMode> attackModeProperty = new EnumProperty<>("Mode", AttackMode.PACKET);
+    private final Property<Boolean> autoblockProperty = new Property<>("Autoblock", true);
+    private final DoubleProperty blockRangeProperty = new DoubleProperty("Block Range", 8.0,
+            autoblockProperty::getValue, 3.0, 8.0, 0.1, Representation.DISTANCE);
     private final DoubleProperty maxAngleChangeProperty = new DoubleProperty("Max Angle Step", 45.0,
             () -> this.attackModeProperty.getValue() == AttackMode.ROTATIONS, 1.0, 201.25, 0.25);
     private final DoubleProperty minApsProperty = new DoubleProperty("Min APS", 8.0, 1.0, 20.0, 1.0);
     private final DoubleProperty maxApsProperty = new DoubleProperty("Max APS", 10.0, 1.0, 20.0, 1.0);
-    private final DoubleProperty rangeProperty = new DoubleProperty("Range", 4.25, 3.0,
-            6.0, 0.05, Representation.DISTANCE);
+    private final DoubleProperty rangeProperty = new DoubleProperty("Range", 4.25, 3.0, 6.0, 0.05, Representation.DISTANCE);
     private final MultiSelectEnumProperty<Checks> checksProperty =
             new MultiSelectEnumProperty<>("Checks", Checks.ALIVE, Checks.FOV);
     private final DoubleProperty fovProperty = new DoubleProperty("Scan Degrees", 201.25,
@@ -55,6 +62,9 @@ public final class MultiAura extends Module {
             new MultiSelectEnumProperty<>("Targets", Targets.PLAYERS);
 
     private final TimerUtil attackTimer = new TimerUtil();
+    private final TimerUtil autoblockTimer = new TimerUtil();
+    private static final C08PacketPlayerBlockPlacement BLOCK_PACKET = new C08PacketPlayerBlockPlacement(
+            new BlockPos(-0.0F, -0.0F, -0.0F), 255, null, 0.0f, 0.0f, 0.0f);
 
     private final List<EntityLivingBase> switchPool = new ArrayList<>();
 
@@ -72,6 +82,12 @@ public final class MultiAura extends Module {
             this.attackSilently();
         else
             this.attackWithRotations(event);
+
+        if (this.autoblockProperty.getValue() && this.autoblockTimer.hasElapsed(50) && isHoldingSword()) {
+            Wrapper.getPlayerController().sendUseItem(Wrapper.getPlayer(), Wrapper.getWorld(),
+                    Wrapper.getPlayer().getCurrentEquippedItem(), BLOCK_PACKET);
+            this.autoblockTimer.reset();
+        }
     };
 
     private void attackSilently() {
@@ -83,13 +99,17 @@ public final class MultiAura extends Module {
             return;
 
         final EntityPlayer player = Wrapper.getPlayer();
-        final int maxTargets = this.maxTargetsProperty.getValue().intValue();
+        final int maxTargets = Math.min(this.maxTargetsProperty.getValue().intValue(), targets.size());
+
+        if (maxTargets == 0)
+            return;
 
         ModuleManager.getInstance(AutoTool.class).doSwordSwap();
 
         // Silent: each look packet points the server at one target while the camera
         // stays put. Capping hits per cycle keeps the packet burst below limiters.
-        for (int i = 0; i < Math.min(maxTargets, targets.size()); i++) {
+        int packets = 0;
+        for (int i = 0; i < maxTargets && packets < 6; i++) {
             final EntityLivingBase entity = targets.get(i);
             final float[] rotations = RotationUtils.getRotationsToEntity(entity);
 
@@ -98,6 +118,7 @@ public final class MultiAura extends Module {
 
             player.swingItem();
             Wrapper.sendPacket(new C02PacketUseEntity(entity, C02PacketUseEntity.Action.ATTACK));
+            packets++;
         }
 
         this.attackTimer.reset();
@@ -166,17 +187,9 @@ public final class MultiAura extends Module {
         return Wrapper.getCurrentScreen() != null || this.scaffold.isEnabled();
     }
 
-    private boolean hasAttackedRecently() {
-        int min = this.minApsProperty.getValue().intValue();
-        int max = this.maxApsProperty.getValue().intValue();
-
-        if (min > max) {
-            min = max;
-            max = min;
-        }
-
-        final int cps = min == max ? min : RandomUtils.nextInt(min, max);
-        return this.attackTimer.hasElapsed(1000L / cps);
+    private boolean isHoldingSword() {
+        final ItemStack stack = Wrapper.getPlayer().getCurrentEquippedItem();
+        return stack != null && stack.getItem() instanceof ItemSword;
     }
 
     private boolean fovCheck(EntityLivingBase entity, int fov) {
@@ -227,6 +240,19 @@ public final class MultiAura extends Module {
 
         return !this.checksProperty.isSelected(Checks.FOV) ||
                 this.fovCheck(entity, this.fovProperty.getValue().intValue());
+    }
+
+    private boolean hasAttackedRecently() {
+        int min = this.minApsProperty.getValue().intValue();
+        int max = this.maxApsProperty.getValue().intValue();
+
+        if (min > max) {
+            min = max;
+            max = min;
+        }
+
+        final int cps = min == max ? min : RandomUtils.nextInt(min, max);
+        return this.attackTimer.hasElapsed(1000L / cps);
     }
 
     @Override
