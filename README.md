@@ -1,10 +1,12 @@
 # THIS IS ON PROGRESS. NOT FULLY RECODED NOW
 
-recoded: speed -> now have onground speed
+**recoded: speed -> now have onground speed
 criticals: now have NoGround,blocksmc,grim,vanilla,full ncp,ncp,watchdog,and more
 Kill aura: Switch
 Multi Aura: New module
-Visuals: in progress
+Visuals: in progress**
+
+Src is too big to drop here
 
 # Original radium client release
 **NOTICE: I HAVE NO PLAINS TO UPDATE OR MAINTAIN THIS REPOSITORY!**
