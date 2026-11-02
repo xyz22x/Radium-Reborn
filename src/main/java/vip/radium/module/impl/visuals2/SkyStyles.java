@@ -35,7 +35,7 @@ public final class SkyStyles extends Module {
 
     private void drawKaleido(Minecraft mc, float pt) {
         double now = System.currentTimeMillis() / 1000.0 * speedProperty.getValue();
-        float spin = (float)(now % 1.0) * 360.0f;
+        float spin = (float)((now % 1.0) * 360.0);
 
         Entity view = mc.getRenderViewEntity();
         if (view == null) return;
@@ -44,9 +44,8 @@ public final class SkyStyles extends Module {
         GL11.glTranslated(view.posX, view.posY, view.posZ);
         GL11.glRotated(spin, 0, 1, 0);
 
-        int segments = 32;
-        double radius = 20.0;
-        double height = 10.0;
+        int segments = 48;
+        double radius = 60.0;
 
         GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glEnable(GL11.GL_BLEND);
@@ -55,15 +54,16 @@ public final class SkyStyles extends Module {
 
         int[] colors = {0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFF00, 0xFFFF00FF, 0xFF00FFFF};
 
-        for (int ring = 0; ring < 3; ring++) {
-            double r = radius * (0.5 + ring * 0.25);
-            double h = height * (ring - 1);
+        // Dome superior (hemisfério)
+        for (int ring = 0; ring < 4; ring++) {
+            double r = radius * (0.3 + ring * 0.2);
+            double h = ring * 6.0;
 
             GL11.glBegin(GL11.GL_LINE_STRIP);
             for (int i = 0; i <= segments; i++) {
-                double angle = (i / (double)segments) * Math.PI * 2 + now * 0.5;
+                double angle = (i / (double)segments) * Math.PI * 2 + now * 0.3;
                 int c = colors[(i + ring * 2) % colors.length];
-                float a = (float)(120 * intensityProperty.getValue()) / 255.0f;
+                float a = (float)(60 * intensityProperty.getValue()) / 255.0f;
                 GL11.glColor4f(
                     ((c >> 16 & 0xFF) / 255.0f),
                     ((c >> 8 & 0xFF) / 255.0f),
@@ -74,6 +74,29 @@ public final class SkyStyles extends Module {
             }
             GL11.glEnd();
         }
+
+        // Linhas verticais conectando os anéis
+        GL11.glBegin(GL11.GL_LINES);
+        for (int i = 0; i <= segments; i += 4) {
+            double angle = (i / (double)segments) * Math.PI * 2;
+            int c = colors[i % colors.length];
+            float a = (float)(40 * intensityProperty.getValue()) / 255.0f;
+            GL11.glColor4f(
+                ((c >> 16 & 0xFF) / 255.0f),
+                ((c >> 8 & 0xFF) / 255.0f),
+                ((c & 0xFF) / 255.0f),
+                a
+            );
+            for (int ring = 0; ring < 3; ring++) {
+                double r1 = radius * (0.3 + ring * 0.2);
+                double r2 = radius * (0.3 + (ring + 1) * 0.2);
+                double h1 = ring * 6.0;
+                double h2 = (ring + 1) * 6.0;
+                GL11.glVertex3d(Math.cos(angle) * r1, h1, Math.sin(angle) * r1);
+                GL11.glVertex3d(Math.cos(angle) * r2, h2, Math.sin(angle) * r2);
+            }
+        }
+        GL11.glEnd();
 
         GL11.glDepthMask(true);
         GL11.glDisable(GL11.GL_BLEND);
@@ -95,14 +118,17 @@ public final class SkyStyles extends Module {
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE);
         GL11.glDepthMask(false);
 
-        GL11.glBegin(GL11.GL_QUADS);
-        for (int i = 0; i < 12; i++) {
-            double angle = (i / 12.0) * Math.PI * 2 + now * 0.2;
-            double r = 40 + Math.sin(now + i) * 10;
-            double h = 15 + Math.cos(now * 0.5 + i) * 8;
+        int[] colors = {0xFF4400FF, 0xFF0044FF, 0xFF0088FF, 0xFF44FF88, 0xFF88FF44, 0xFFFFFF};
 
-            int c = nebulaColor(i, now);
-            float a = (float)(0.15 + 0.1 * Math.sin(now + i)) * intensityProperty.getValue().floatValue();
+        GL11.glBegin(GL11.GL_QUADS);
+        for (int i = 0; i < 16; i++) {
+            double angle = (i / 16.0) * Math.PI * 2 + now * 0.15;
+            double r = 50 + Math.sin(now + i * 0.7) * 15;
+            double h = 20 + Math.cos(now * 0.4 + i) * 10;
+            double size = 12 + Math.sin(now * 0.6 + i) * 6;
+
+            int c = colors[(i + (int)(now)) % colors.length];
+            float a = (float)(0.12 + 0.08 * Math.sin(now + i)) * intensityProperty.getValue().floatValue();
 
             GL11.glColor4f(
                 ((c >> 16 & 0xFF) / 255.0f),
@@ -112,9 +138,9 @@ public final class SkyStyles extends Module {
             );
 
             GL11.glVertex3d(Math.cos(angle) * r, h, Math.sin(angle) * r);
-            GL11.glVertex3d(Math.cos(angle + 0.3) * r, h, Math.sin(angle + 0.3) * r);
-            GL11.glVertex3d(Math.cos(angle + 0.3) * (r + 8), h + 4, Math.sin(angle + 0.3) * (r + 8));
-            GL11.glVertex3d(Math.cos(angle) * (r + 8), h + 4, Math.sin(angle) * (r + 8));
+            GL11.glVertex3d(Math.cos(angle + 0.4) * r, h, Math.sin(angle + 0.4) * r);
+            GL11.glVertex3d(Math.cos(angle + 0.4) * (r + size), h + size * 0.5, Math.sin(angle + 0.4) * (r + size));
+            GL11.glVertex3d(Math.cos(angle) * (r + size), h + size * 0.5, Math.sin(angle) * (r + size));
         }
         GL11.glEnd();
 
@@ -122,11 +148,6 @@ public final class SkyStyles extends Module {
         GL11.glDisable(GL11.GL_BLEND);
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glPopMatrix();
-    }
-
-    private int nebulaColor(int i, double now) {
-        int[] colors = {0xFF4400FF, 0xFF0044FF, 0xFF0088FF, 0xFF44FF88, 0xFF88FF44, 0xFFFFFF};
-        return colors[(i + (int)(now * 2)) % colors.length];
     }
 
     public SkyStyles() {
@@ -141,10 +162,10 @@ public final class SkyStyles extends Module {
 
     public enum SkyMode {
         KALEIDO("Kaleido"), NEBULA("Nebula"), WATCHER("Watcher"),
-        NEBULA2("Nebula 2"), VOID("Void"), SUNSET("Sunset"),
-        MIDNIGHT("Midnight"), SOLAR("Solar"), GALACTIC("Galactic"),
-        PRISM("Prism"), OCEAN("Ocean"), FOREST("Forest"),
-        CYBER("Cyber"), CRYSTAL("Crystal"), ECLIPSE("Eclipse");
+        VOID("Void"), SUNSET("Sunset"), MIDNIGHT("Midnight"),
+        SOLAR("Solar"), GALACTIC("Galactic"), PRISM("Prism"),
+        OCEAN("Ocean"), FOREST("Forest"), CYBER("Cyber"),
+        CRYSTAL("Crystal"), ECLIPSE("Eclipse");
 
         public final String label;
         SkyMode(String label) { this.label = label; }

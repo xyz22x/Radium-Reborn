@@ -5,19 +5,16 @@ import io.github.nevalackin.homoBus.Listener;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.entity.EntityLivingBase;
+import org.lwjgl.opengl.GL11;
 import vip.radium.core.GameClock;
 import vip.radium.core.PlayerFilter;
 import vip.radium.event.impl.render.Render3DEvent;
 import vip.radium.module.Module;
 import vip.radium.module.ModuleCategory;
 import vip.radium.module.ModuleInfo;
-import vip.radium.module.ModuleManager;
 import vip.radium.property.Property;
 import vip.radium.property.impl.DoubleProperty;
 import vip.radium.property.impl.EnumProperty;
-import vip.radium.render.RenderState;
-import vip.radium.render.ParticleSystem;
-import vip.radium.render.Vfx;
 import vip.radium.utils.Wrapper;
 
 import java.util.ArrayList;
@@ -33,8 +30,7 @@ public final class TrailsVisuals extends Module {
     public final Property<Boolean> othersProperty = new Property<>("Others", false);
     public final DoubleProperty maxDistProperty = new DoubleProperty("Max Distance", 32.0, 8.0, 128.0, 1.0);
 
-    private final ParticleSystem particles = new ParticleSystem(4096);
-    private final List<Point> history = new ArrayList<>();
+    private final List<TrailPoint> selfHistory = new ArrayList<>();
 
     public TrailsVisuals() {
         setSuffixListener(modeProperty);
@@ -44,19 +40,25 @@ public final class TrailsVisuals extends Module {
     public final Listener<Render3DEvent> onRender3D = event -> {
         Minecraft mc = Minecraft.getMinecraft();
         EntityPlayerSP self = Wrapper.getPlayer();
-        if (mc.theWorld == null || self == null) {
-            return;
-        }
+        if (mc.theWorld == null || self == null) return;
 
         float partialTicks = event.getPartialTicks();
         double now = GameClock.seconds();
+        double maxLen = lengthProperty.getValue();
 
-        // Record self position
+        selfHistory.clear();
+
+        // Gravar histórico do self
         if (selfProperty.getValue()) {
-            record(self, partialTicks);
+            addPoint(selfHistory, self, partialTicks);
         }
 
-        // Record others
+        // Desenhar trail do self
+        if (!selfHistory.isEmpty()) {
+            drawTrail(selfHistory, now, maxLen);
+        }
+
+        // Gravar e desenhar outros
         if (othersProperty.getValue()) {
             List<EntityLivingBase> entities = Wrapper.getLivingEntities(e -> {
                 if (!(e instanceof net.minecraft.entity.player.EntityPlayer)) return false;
@@ -65,104 +67,63 @@ public final class TrailsVisuals extends Module {
                 return self.getDistanceToEntity(e) <= maxDistProperty.getValue();
             });
             for (EntityLivingBase e : entities) {
-                record(e, partialTicks);
+                List<TrailPoint> h = new ArrayList<>();
+                addPoint(h, e, partialTicks);
+                drawTrail(h, now, maxLen);
             }
         }
+    };
 
-        // Spawn trail particles from history
+    private void addPoint(List<TrailPoint> history, EntityLivingBase e, float pt) {
+        double x = e.lastTickPosX + (e.posX - e.lastTickPosX) * pt;
+        double y = e.lastTickPosY + (e.posY - e.lastTickPosY) * pt;
+        double z = e.lastTickPosZ + (e.posZ - e.lastTickPosZ) * pt;
+        history.add(new TrailPoint(x, y, z, (float) GameClock.seconds()));
+    }
+
+    private void drawTrail(List<TrailPoint> history, double now, double maxLen) {
         TrailMode mode = modeProperty.getValue();
-        float maxLen = lengthProperty.getValue().floatValue();
         float width = widthProperty.getValue().floatValue();
 
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glLineWidth(width);
+        GL11.glDepthMask(false);
+
         for (int i = 0; i < history.size() - 1; i++) {
-            Point p0 = history.get(i);
-            Point p1 = history.get(i + 1);
+            TrailPoint p0 = history.get(i);
+            TrailPoint p1 = history.get(i + 1);
+
             double dx = p1.x - p0.x;
             double dy = p1.y - p0.y;
             double dz = p1.z - p0.z;
             double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (dist < 0.05) continue;
+            if (dist < 0.02) continue;
 
-            int segments = Math.max(1, (int)(dist / 0.3));
-            for (int s = 0; s < segments; s++) {
-                float t = s / (float)segments;
-                double x = p0.x + dx * t;
-                double y = p0.y + dy * t;
-                double z = p0.z + dz * t;
-                float age = (float)(now - p0.time);
-                if (age > maxLen) continue;
+            float age = (float) (now - p0.time);
+            if (age > maxLen) continue;
 
-                float alpha = 1.0f - age / maxLen;
-                int color = getColor(mode, age);
+            float alpha = 1.0f - age / (float) maxLen;
+            if (alpha <= 0.0f) continue;
 
-                switch (mode) {
-                    case LIQUID:
-                        particles.spawn(ParticleSystem.GLOW, x, y, z,
-                                0.1f, 0.1f, 0.1f,
-                                0.6f, width * 0.6f, 0.0f,
-                                color, 0.0f, 2.0f, 0.0f, 0.5f);
-                        break;
-                    case STAR:
-                        particles.spawn(ParticleSystem.STAR, x, y, z,
-                                0.05f, 0.05f, 0.05f,
-                                0.8f, width * 0.4f, 0.0f,
-                                color, 0.0f, 1.5f, 0.0f, 0.3f);
-                        break;
-                    case SPEED:
-                        particles.spawn(ParticleSystem.GLOW, x, y, z,
-                                (float)(dx * 2), (float)(dy * 2), (float)(dz * 2),
-                                0.4f, width * 0.8f, 0.0f,
-                                color, 0.0f, 3.0f, 0.2f, 0.7f);
-                        break;
-                    case DOODLE:
-                        if (i % 3 == 0) {
-                            particles.spawn(ParticleSystem.GLOW, x, y, z,
-                                    (float)(Math.random() - 0.5) * 0.2f,
-                                    (float)(Math.random() - 0.5) * 0.2f,
-                                    (float)(Math.random() - 0.5) * 0.2f,
-                                    0.5f, width * 0.5f, 0.0f,
-                                    color, 0.0f, 2.0f, 0.1f, 0.4f);
-                        }
-                        break;
-                    case COMET:
-                        particles.spawn(ParticleSystem.GLOW, x, y, z,
-                                (float)(-dx * 3), (float)(-dy * 3), (float)(-dz * 3),
-                                0.7f, width * 1.0f, 0.0f,
-                                color, 0.0f, 4.0f, 0.5f, 0.8f);
-                        break;
-                    case LIGHTNING:
-                        if (i % 2 == 0) {
-                            particles.spawn(ParticleSystem.GLOW, x, y, z,
-                                    (float)(Math.random() - 0.5) * 0.4f,
-                                    (float)(Math.random() - 0.5) * 0.4f,
-                                    (float)(Math.random() - 0.5) * 0.4f,
-                                    0.3f, width * 0.7f, 0.0f,
-                                    color, 0.0f, 5.0f, 0.3f, 0.9f);
-                        }
-                        break;
-                }
-            }
+            int color = getColor(mode, age);
+
+            GL11.glBegin(GL11.GL_LINES);
+            GL11.glColor4f(
+                ((color >> 16 & 0xFF) / 255.0f),
+                ((color >> 8 & 0xFF) / 255.0f),
+                ((color & 0xFF) / 255.0f),
+                alpha
+            );
+            GL11.glVertex3d(p0.x, p0.y, p0.z);
+            GL11.glVertex3d(p1.x, p1.y, p1.z);
+            GL11.glEnd();
         }
 
-        // Render particles
-        Vfx.setCamera(new vip.radium.render.Camera());
-        ((vip.radium.render.Camera) Vfx.camera()).captureModelView();
-        RenderState.begin();
-        particles.render(0, 0, 0);
-        RenderState.end();
-
-        // Trim history
-        double cutoff = now - maxLen;
-        while (!history.isEmpty() && history.get(0).time < cutoff) {
-            history.remove(0);
-        }
-    };
-
-    private void record(EntityLivingBase e, float partialTicks) {
-        double x = e.lastTickPosX + (e.posX - e.lastTickPosX) * partialTicks;
-        double y = e.lastTickPosY + (e.posY - e.lastTickPosY) * partialTicks;
-        double z = e.lastTickPosZ + (e.posZ - e.lastTickPosZ) * partialTicks;
-        history.add(new Point(x, y, z, (float)GameClock.seconds()));
+        GL11.glDepthMask(true);
+        GL11.glDisable(GL11.GL_BLEND);
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
     }
 
     private int getColor(TrailMode mode, float age) {
@@ -179,14 +140,12 @@ public final class TrailsVisuals extends Module {
 
     @Override
     public void onEnable() {
-        history.clear();
-        particles.clear();
+        selfHistory.clear();
     }
 
     @Override
     public void onDisable() {
-        history.clear();
-        particles.clear();
+        selfHistory.clear();
     }
 
     public enum TrailMode {
@@ -209,11 +168,11 @@ public final class TrailsVisuals extends Module {
         }
     }
 
-    private static class Point {
+    private static class TrailPoint {
         final double x, y, z;
         final float time;
 
-        Point(double x, double y, double z, float time) {
+        TrailPoint(double x, double y, double z, float time) {
             this.x = x;
             this.y = y;
             this.z = z;
