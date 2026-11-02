@@ -10,4 +10,5 @@ Src is too big to drop here
 
 ## Disclaimer
 Don't copyright strike this repository, its purpose is to stop the spreading of malware from source releases and "versions" folder executable JAR releases.
-# REAL SOURCE CODE IS ON RELEASES: RADIUM-B1.7z
+
+Why visuals have so much bugs😢
