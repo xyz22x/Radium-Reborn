@@ -6,5 +6,6 @@ public enum ModuleCategory {
     PLAYER,
     MISCELLANEOUS,
     VISUALS,
+    VISUALS2,
     ESP,
 }

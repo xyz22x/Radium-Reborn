@@ -16,6 +16,7 @@ import vip.radium.module.impl.misc.hackerdetect.HackerDetector;
 import vip.radium.module.impl.movement.*;
 import vip.radium.module.impl.player.*;
 import vip.radium.module.impl.visuals.*;
+import vip.radium.module.impl.visuals2.*;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -73,6 +74,10 @@ public final class ModuleManager {
                 new EnchantGlint(),
                 new NoScoreboard(),
                 new Hats(),
+                // Visuals 2 (Furiah ports)
+                new WeaponsVisuals(),
+                new SkyStyles(),
+                new TrailsVisuals(),
                 // Other
                 new InventoryMove(),
                 new MemoryFix(),
@@ -87,7 +92,8 @@ public final class ModuleManager {
                 new NoRotate(),
                 new AutoTool(),
                 new InventoryManager(),
-                new NoFall());
+                new NoFall(),
+                new FastUse());
 
         getModules().forEach(Module::reflectProperties);
 

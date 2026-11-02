@@ -56,7 +56,7 @@ public final class SkeetUI extends GuiScreen {
     public static final float HALF_GROUP_BOX = (GROUP_BOX_WIDTH - 2.0F) / 2 - GROUP_BOX_LEFT_MARGIN * 2;
     private static final SkeetUI INSTANCE;
     private static final ResourceLocation BACKGROUND_IMAGE = new ResourceLocation("radium/gui/skeetchainmail.png");
-    private static final char[] ICONS = {'E', 'G', 'F', 'I', 'D', 'J', 'H'};
+    private static final char[] ICONS = {'E', 'G', 'F', 'I', 'D', 'A', 'H'};
     private static final float USABLE_AREA_HEIGHT = HEIGHT - TOTAL_BORDER_WIDTH * 2 - RAINBOW_BAR_WIDTH;
     private static final int TAB_SELECTOR_HEIGHT = (int) (USABLE_AREA_HEIGHT - 20) / ICONS.length;
     public static final Property<Integer> colorProperty = new Property<>("GUI Color", Colors.PURPLE);
